@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[16]:
+# In[8]:
 
+
+import pandas as pd 
 
 def clearNan(x):
     if str(x) == 'nan':
@@ -12,6 +14,12 @@ def clearNan(x):
 
 def clearNanToNone(x):
     if (str(x).lower().strip()) == 'nan' or (str(x).strip() == '') or (x == None):
+        return None
+    else:
+        return x
+    
+def clearNA(x):
+    if str(x).upper().strip() == "N/A":
         return None
     else:
         return x
@@ -33,10 +41,11 @@ def clearComma(x):
         return None
     else:
         return x
-
-
-# In[ ]:
-
-
-
+    
+def ifNumeric(x):
+    try: return(int(x))
+    except Exception as e: return None
+    
+def empty_df():
+    return pd.DataFrame()
 

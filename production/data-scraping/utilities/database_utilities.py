@@ -8,7 +8,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# In[16]:
+# In[2]:
 
 
 from sqlalchemy import create_engine
@@ -29,6 +29,12 @@ def query_database_to_list(system, user, pw, host, port, database, query):
     connection.close()
     
     return res
+
+def query_database_to_df(system, user, pw, host, port, database, query):
+    engine = create_engine('{0}://{1}:{2}@{3}:{4}/{5}'.format(system, user, pw, host, port, database))
+    df = pd.read_sql(query, engine)
+    
+    return df
 
 def get_table_new_id(system, user, pw, host, port, database, table, id_column):
     connection = psycopg2.connect(user=user, password=pw, host=host, port=port, database=database)
@@ -51,4 +57,24 @@ def get_table_new_id(system, user, pw, host, port, database, table, id_column):
         max_index = int(max_index) + 1
     
     return max_index
+
+def truncate_table(system, user, pw, host, port, database, table):
+    connection = psycopg2.connect(user=user, password=pw, host=host, port=port, database=database)
+    cursor = connection.cursor()
+    
+    try:
+        cursor.execute("TRUNCATE TABLE {0}".format(table))
+        connection.commit()
+        connection.close()
+    
+        return True
+    except:
+        connection.close()
+        return False
+
+
+# In[ ]:
+
+
+
 

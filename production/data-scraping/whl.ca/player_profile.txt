@@ -1,0 +1,120 @@
+
+write_mode = 'append'
+target_table = 'whl_player_profile'
+
+import pandas as pd
+import numpy as np
+import sys
+sys.path.append('../../../')
+
+import settings as st
+import datetime
+
+sys.path.append('../../../production/data-scraping/utilities')
+
+import web_utilities as wu
+import database_utilities as du
+import encoder_utilities as eu
+import pd_utilities as pu
+
+import pandas as pd
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.width', 1000)
+
+db_host = st.database['local']['host']
+db_port = st.database['local']['port']
+db_user = st.database['local']['user']
+db_pass = st.database['local']['pass']
+db_sys = st.database['local']['system']
+db_db = st.database['local']['db']
+
+key = "41b145a848f4bd67"
+
+print("START PROCCESS {0}".format(str(datetime.datetime.now())))
+
+sql = "SELECT DISTINCT player_id FROM whl_team_roster_by_season WHERE player_id IS NOT NULL ORDER BY player_id ASC"
+res = du.query_database_to_list(db_sys, db_user, db_pass, db_host, db_port, db_db, sql)
+
+def empty_df():
+    return pd.DataFrame()
+
+master_df = empty_df()
+
+def df_cleanup(df):
+    
+    """
+    Extract Draft Data
+    """
+    try:
+        col_list = []
+        for c in pd.DataFrame(df.draft.apply(lambda x: pu.clearNan(x)).values.tolist()).columns:
+            col_list.append(c)
+
+        df[col_list] = pd.DataFrame(df.draft.values.tolist())
+        df = df.drop(['draft'], axis=1)
+    
+        df['draft_date'] = df.draft_date.apply(lambda x: pu.clearDate(x))
+        df["draft_mode"] = pd.to_numeric(df["draft_mode"])
+        df["draft_rank"] = pd.to_numeric(df["draft_rank"])
+        df["draft_round"] = pd.to_numeric(df["draft_round"])
+        df["draft_type_id"] = pd.to_numeric(df["draft_type_id"])
+    
+    except Exception as e: pass
+    
+    """
+    Clean up Data
+    """
+    df['birthdate'] = df.birthdate.apply(lambda x: pu.clearDate(x))
+    df['rookie'] = df.rookie.apply(lambda x: pu.clearNanToNone(x))
+
+    """
+    Fix Data Types
+    """
+    df["active"] = pd.to_numeric(df["active"])
+    
+    df["id"] = pd.to_numeric(df["id"])
+    df["jersey_number"] = pd.to_numeric(df["jersey_number"])
+    df["most_recent_team_id"] = pd.to_numeric(df["most_recent_team_id"])
+    df["rookie"] = pd.to_numeric(df["rookie"])
+    df["show_on_roster"] = pd.to_numeric(df["show_on_roster"])
+    df["weight"] = pd.to_numeric(df["weight"])
+
+    df["birthdate"] = pd.to_datetime(df["birthdate"])
+    
+    return df
+
+i = 1
+for r in res:
+    player_id = str(r['player_id']).replace(".0", "")
+    
+    print(i, player_id)
+        
+    url = "http://lscluster.hockeytech.com/feed/?feed=modulekit&view=player&key={0}&fmt=json&client_code=whl&lang=en&player_id={1}&category=profile".format(key, player_id)
+    
+    json_data = wu.return_json(url)
+    
+    df = pd.DataFrame(json_data['SiteKit']['Player'])
+        
+    master_df = master_df.append(df)
+    
+    i+=1
+    
+    if (int(i)%100) == 0:
+                
+        master_df = df_cleanup(master_df)
+        du.write_df_to_database(master_df, target_table, db_sys, db_user, db_pass, db_host, db_port, db_db, write_mode, False)
+        
+        print("WROTE 100 ROWS")
+        
+        master_df = empty_df()
+
+#if write_mode == 'append':
+#    index = du.get_table_new_id(db_sys, db_user, db_pass, db_host, db_port, db_db, target_table, 'index')
+#    master_df.insert(0, 'index', master_df.index + index)
+#else:
+#    master_df.insert(0, 'index', master_df.index)
+
+du.write_df_to_database(master_df, target_table, db_sys, db_user, db_pass, db_host, db_port, db_db, write_mode, False)
+
+print("END PROCCESS {0}".format(str(datetime.datetime.now())))
